@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dubizzle Car Importer - AI Enhanced</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .loader {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3b82f6;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white min-h-screen">
+    <div class="container mx-auto px-6 py-8 max-w-6xl">
+        <header class="text-center mb-12">
+            <h1 class="text-5xl font-bold mb-4 bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
+                🚗 Dubizzle Car Importer
+            </h1>
+            <p class="text-slate-400 text-lg">Estrai dati auto da Dubizzle con AI Enhancement</p>
+        </header>
+
+        <div class="bg-slate-800/50 backdrop-blur rounded-2xl p-8 shadow-2xl border border-slate-700 mb-8">
+            <div class="space-y-6">
+                <div>
+                    <label class="block text-sm font-medium text-slate-300 mb-2">URL Listing Dubizzle</label>
+                    <input 
+                        type="text" 
+                        id="dubizzleUrl" 
+                        placeholder="https://dubai.dubizzle.com/motors/used-cars/..."
+                        class="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-white"
+                    >
+                </div>
+
+                <div class="flex items-center justify-between p-4 bg-gradient-to-r from-purple-500/10 to-blue-500/10 rounded-lg border border-purple-500/30">
+                    <div>
+                        <label class="flex items-center cursor-pointer">
+                            <input type="checkbox" id="useAI" checked class="mr-3 w-5 h-5">
+                            <span class="font-medium">🤖 Abilita AI Enhancement</span>
+                        </label>
+                        <p class="text-sm text-slate-400 ml-8 mt-1">Genera titoli e descrizioni professionali con Claude AI</p>
+                    </div>
+                    <span id="aiStatus" class="px-3 py-1 bg-green-500/20 text-green-300 text-xs rounded-full">Attivo</span>
+                </div>
+
+                <div class="flex gap-4">
+                    <button 
+                        onclick="extractData()" 
+                        id="extractBtn"
+                        class="flex-1 px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-700 disabled:cursor-not-allowed rounded-lg font-medium transition-all shadow-lg hover:shadow-blue-500/50"
+                    >
+                        🔍 Estrai Dati
+                    </button>
+                    <button 
+                        onclick="downloadCSV()" 
+                        id="downloadBtn"
+                        disabled
+                        class="px-6 py-3 bg-green-600 hover:bg-green-700 disabled:bg-slate-700 disabled:cursor-not-allowed rounded-lg font-medium transition-all"
+                    >
+                        ⬇️ Scarica CSV
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div id="loading" class="hidden text-center py-12">
+            <div class="loader mx-auto mb-4"></div>
+            <p class="text-slate-400">Estrazione in corso...</p>
+            <p class="text-sm text-slate-500 mt-2">Caricamento immagini HD e generazione contenuti AI</p>
+        </div>
+
+        <div id="error" class="hidden bg-red-500/10 border border-red-500/50 rounded-xl p-4 mb-8">
+            <p class="text-red-300" id="errorMessage"></p>
+        </div>
+
+        <div id="success" class="hidden bg-green-500/10 border border-green-500/50 rounded-xl p-4 mb-8">
+            <div class="flex items-start gap-3">
+                <span class="text-2xl">✅</span>
+                <div>
+                    <p class="font-medium text-green-300">Dati estratti con successo!</p>
+                    <p class="text-sm text-green-400/80" id="successMessage"></p>
+                </div>
+            </div>
+        </div>
+
+        <div id="results" class="hidden space-y-6">
+            <div id="aiContent" class="bg-gradient-to-r from-purple-500/10 to-blue-500/10 border border-purple-500/30 rounded-2xl p-8">
+                <div class="flex items-center gap-3 mb-6">
+                    <span class="text-3xl">🤖</span>
+                    <h2 class="text-2xl font-bold">Contenuti AI-Enhanced</h2>
+                </div>
+                
+                <div class="space-y-6">
+                    <div>
+                        <label class="text-sm text-slate-400 mb-2 block">Titolo Generato</label>
+                        <div id="aiTitle" class="bg-slate-900/50 rounded-lg p-4 text-lg font-semibold"></div>
+                    </div>
+                    
+                    <div>
+                        <label class="text-sm text-slate-400 mb-2 block">Descrizione Professionale</label>
+                        <div id="aiDescription" class="bg-slate-900/50 rounded-lg p-4 text-sm leading-relaxed"></div>
+                    </div>
+                    
+                    <div>
+                        <label class="text-sm text-slate-400 mb-2 block">Highlights</label>
+                        <div id="aiHighlights" class="flex flex-wrap gap-2"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-slate-800/50 backdrop-blur rounded-2xl p-8 shadow-2xl border border-slate-700">
+                <h2 class="text-2xl font-bold mb-6">📊 Dati Auto Estratti</h2>
+                
+                <div class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6" id="carSpecs"></div>
+                
+                <div class="mt-6 pt-6 border-t border-slate-700">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="font-semibold text-lg">🖼️ Immagini HD</h3>
+                        <span id="imageCount" class="px-3 py-1 bg-blue-500/20 text-blue-300 rounded-full text-sm"></span>
+                    </div>
+                    <div id="imageGrid" class="grid grid-cols-3 md:grid-cols-5 gap-2"></div>
+                    <div class="mt-4 text-xs text-slate-500 font-mono bg-slate-900/50 p-3 rounded overflow-x-auto" id="imageUrls"></div>
+                </div>
+
+                <div class="mt-6 pt-6 border-t border-slate-700">
+                    <h3 class="font-semibold mb-3">⚙️ Optional e Accessori</h3>
+                    <div id="features" class="flex flex-wrap gap-2"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentData = null;
+
+        document.getElementById('useAI').addEventListener('change', (e) => {
+            const status = document.getElementById('aiStatus');
+            if (e.target.checked) {
+                status.textContent = 'Attivo';
+                status.className = 'px-3 py-1 bg-green-500/20 text-green-300 text-xs rounded-full';
+            } else {
+                status.textContent = 'Disattivo';
+                status.className = 'px-3 py-1 bg-slate-500/20 text-slate-400 text-xs rounded-full';
+            }
+        });
+
+        async function extractData() {
+            const url = document.getElementById('dubizzleUrl').value;
+            const useAI = document.getElementById('useAI').checked;
+
+            if (!url.includes('dubizzle.com')) {
+                showError('Inserisci un URL valido di Dubizzle');
+                return;
+            }
+
+            document.getElementById('error').classList.add('hidden');
+            document.getElementById('success').classList.add('hidden');
+            document.getElementById('results').classList.add('hidden');
+            document.getElementById('loading').classList.remove('hidden');
+            document.getElementById('extractBtn').disabled = true;
+
+            try {
+                const response = await fetch('/api/scrape', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url, useAI })
+                });
+
+                const result = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(result.error || 'Errore durante lo scraping');
+                }
+
+                currentData = result.data;
+                displayResults(result);
+                
+                document.getElementById('successMessage').textContent = 
+                    `${result.imagesCount} immagini HD estratte${result.aiEnhanced ? ' + Contenuti AI generati' : ''}`;
+                document.getElementById('success').classList.remove('hidden');
+                document.getElementById('downloadBtn').disabled = false;
+
+            } catch (error) {
+                showError(error.message);
+            } finally {
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('extractBtn').disabled = false;
+            }
+        }
+
+        function displayResults(result) {
+            const data = result.data;
+            
+            if (result.aiEnhanced) {
+                document.getElementById('aiContent').classList.remove('hidden');
+                document.getElementById('aiTitle').textContent = data.aiTitle;
+                document.getElementById('aiDescription').textContent = data.aiDescription;
+                
+                const highlights = data.aiHighlights.split('|').map(h => h.trim());
+                document.getElementById('aiHighlights').innerHTML = highlights
+                    .map(h => `<span class="px-3 py-1 bg-purple-500/20 text-purple-300 rounded-full text-sm">✓ ${h}</span>`)
+                    .join('');
+            } else {
+                document.getElementById('aiContent').classList.add('hidden');
+            }
+
+            const specs = [
+                { label: 'Anno', value: data.year },
+                { label: 'Marca', value: data.make },
+                { label: 'Modello', value: data.model },
+                { label: 'Carrozzeria', value: data.bodyStyle },
+                { label: 'Km', value: data.mileage },
+                { label: 'Trasmissione', value: data.transmission },
+                { label: 'Prezzo', value: `AED ${data.price}` },
+                { label: 'Motore', value: data.engine },
+                { label: 'Trazione', value: data.drivetrain },
+                { label: 'Colore Ext', value: data.exteriorColor },
+                { label: 'Colore Int', value: data.interiorColor },
+                { label: 'Località', value: data.location }
+            ];
+
+            document.getElementById('carSpecs').innerHTML = specs
+                .map(s => `
+                    <div class="bg-slate-900/50 rounded-lg p-3">
+                        <p class="text-xs text-slate-500 mb-1">${s.label}</p>
+                        <p class="font-medium">${s.value}</p>
+                    </div>
+                `).join('');
+
+            const images = data.imagesUrl.split('|');
+            document.getElementById('imageCount').textContent = `${images.length} immagini`;
+            document.getElementById('imageGrid').innerHTML = images
+                .slice(0, 10)
+                .map(url => `<img src="${url}" class="w-full h-20 object-cover rounded" onerror="this.src='https://via.placeholder.com/150'" alt="Car image">`)
+                .join('');
+            document.getElementById('imageUrls').textContent = data.imagesUrl;
+
+            if (data.multiOptions) {
+                const features = data.multiOptions.split(',');
+                document.getElementById('features').innerHTML = features
+                    .map(f => `<span class="px-3 py-1 bg-blue-500/20 text-blue-300 rounded-full text-xs">${f.trim()}</span>`)
+                    .join('');
+            }
+
+            document.getElementById('results').classList.remove('hidden');
+        }
+
+        function downloadCSV() {
+            if (!currentData) return;
+
+            const headers = [
+                'year', 'make', 'model', 'body-style', 'mileage', 'transmission',
+                'fuel-economy', 'condition', 'location', 'price', 'drivetrain',
+                'engine', 'exterior-color', 'interior-color', 'mpg', 'stock-number',
+                'vin-number', 'vehicle_overview', 'multi_options', 'latitude',
+                'longitude', 'other_comments', 'video_url', 'city_mpg', 'highway_mpg',
+                'images_url'
+            ];
+
+            const escapeCSV = (str) => {
+                if (!str) return '';
+                str = String(str);
+                if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+                    return `"${str.replace(/"/g, '""')}"`;
+                }
+                return str;
+            };
+
+            const row = [
+                currentData.year,
+                currentData.make,
+                currentData.model,
+                currentData.bodyStyle,
+                currentData.mileage,
+                currentData.transmission,
+                currentData.fuelEconomy,
+                currentData.condition,
+                currentData.location,
+                currentData.price,
+                currentData.drivetrain,
+                currentData.engine,
+                currentData.exteriorColor,
+                currentData.interiorColor,
+                currentData.mpg,
+                currentData.stockNumber,
+                currentData.vinNumber,
+                escapeCSV(currentData.vehicleOverview),
+                escapeCSV(currentData.multiOptions),
+                currentData.latitude,
+                currentData.longitude,
+                escapeCSV(currentData.otherComments),
+                currentData.videoUrl,
+                currentData.cityMpg,
+                currentData.highwayMpg,
+                currentData.imagesUrl
+            ];
+
+            const csv = headers.join(',') + '\n' + row.join(',');
+
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            
+            link.setAttribute('href', url);
+            link.setAttribute('download', `dubizzle_${currentData.make}_${currentData.model}_${Date.now()}.csv`);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        function showError(message) {
+            document.getElementById('errorMessage').textContent = message;
+            document.getElementById('error').classList.remove('hidden');
+        }
+    </script>
+</body>
+</html>
