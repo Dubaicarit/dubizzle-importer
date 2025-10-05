@@ -35,8 +35,14 @@ async function scrapeDubizzle(url) {
     await page.setViewport({ width: 1920, height: 1080 });
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
     
-    console.log('Caricamento pagina:', url);
-    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 90000 });
+    // Usa ScraperAPI come proxy per bypassare Incapsula
+const SCRAPER_API_KEY = process.env.SCRAPER_API_KEY || '';
+const proxyUrl = SCRAPER_API_KEY 
+  ? `http://api.scraperapi.com?api_key=${SCRAPER_API_KEY}&url=${encodeURIComponent(url)}&render=true`
+  : url;
+
+console.log('Caricamento pagina:', SCRAPER_API_KEY ? 'via ScraperAPI' : 'diretto');
+await page.goto(proxyUrl, { waitUntil: 'domcontentloaded', timeout: 90000 });
     await page.waitForTimeout(5000);
     await page.waitForTimeout(5000);
 
