@@ -19,17 +19,17 @@ async function scrapeDubizzle(url) {
   let browser;
   
   try {
-   browser = await puppeteer.launch({
-  headless: 'new',
-  args: [
-    '--no-sandbox',
-    '--disable-setuid-sandbox',
-    '--disable-dev-shm-usage',
-    '--disable-gpu',
-    '--disable-blink-features=AutomationControlled',
-    '--window-size=1920,1080'
-  ]
-});
+    browser = await puppeteer.launch({
+      headless: 'new',
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--disable-blink-features=AutomationControlled',
+        '--window-size=1920,1080'
+      ]
+    });
 
     const page = await browser.newPage();
     await page.setViewport({ width: 1920, height: 1080 });
@@ -37,185 +37,127 @@ async function scrapeDubizzle(url) {
     
     console.log('Caricamento pagina:', url);
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 90000 });
-
-// Aspetta che la pagina carichi completamente
-await page.waitForTimeout(5000);
-
-// Prova diversi selettori
-try {
-  await page.waitForSelector('h1, [data-testid="title"], .listing-title', { timeout: 15000 });
-} catch (e) {
-  console.log('Selettore h1 non trovato, continuo comunque...');
-}
+    await page.waitForTimeout(5000);
     
-   const carData = await page.evaluate(() => {
-  const getText = (selector) => {
-    const el = document.querySelector(selector);
-    return el ? el.textContent.trim() : '';
-  };
-  
-  // Estrai titolo - nuovo selettore Dubizzle
-  const title = getText('h6[data-testid="listing-sub-heading"]') || 
-                getText('h6.MuiTypography-h6') || 
-                getText('h1') || '';
-  
-  // Estrai prezzo - nuovo selettore Dubizzle
-  const priceText = getText('span.MuiTypography-h5') || '';
-  const price = priceText.replace(/[^\d]/g, '');
-  
-  // Parse titolo per marca/modello/anno
-  const titleParts = title.split(' ');
-  const make = titleParts[0] || '';
-  
-  // Estrai anno dal titolo se presente
-  const yearMatch = title.match(/\d{4}/);
-  const year = yearMatch ? yearMatch[0] : '';
-  
-  // Modello è tutto tranne marca e anno
-  const model = titleParts.slice(1).join(' ').replace(/\d{4}/, '').trim() || '';
-  
-  // Estrai specifiche dalla tabella
-  const specs = {};
-  
-  // Pattern 1: Cerca righe con struttura tabella
-  document.querySelectorAll('div[class*="PropertyRow"], tr').forEach(row => {
-    const cells = row.querySelectorAll('td, div, span');
-    if (cells.length >= 2) {
-      const key = cells[0].textContent.trim();
-      const value = cells[1].textContent.trim();
-      if (key && value && key.length < 50) {
-        specs[key] = value;
-      }
+    try {
+      await page.waitForSelector('h6[data-testid="listing-sub-heading"], h1', { timeout: 15000 });
+    } catch (e) {
+      console.log('Selettore titolo non trovato, continuo comunque...');
     }
-  });
-  
-  // Pattern 2: Cerca liste con due punti
-  document.querySelectorAll('li, div[class*="spec"], div[class*="detail"]').forEach(el => {
-    const text = el.textContent.trim();
-    if (text.includes(':')) {
-      const parts = text.split(':');
-      if (parts.length === 2) {
-        const key = parts[0].trim();
-        const value = parts[1].trim();
-        if (key && value && key.length < 50) {
-          specs[key] = value;
+    
+    const carData = await page.evaluate(() => {
+      const getText = (selector) => {
+        const el = document.querySelector(selector);
+        return el ? el.textContent.trim() : '';
+      };
+      
+      const title = getText('h6[data-testid="listing-sub-heading"]') || 
+                    getText('h6.MuiTypography-h6') || 
+                    getText('h1') || '';
+      
+      const priceText = getText('span.MuiTypography-h5') || '';
+      const price = priceText.replace(/[^\d]/g, '');
+      
+      const titleParts = title.split(' ');
+      const make = titleParts[0] || '';
+      
+      const yearMatch = title.match(/\d{4}/);
+      const year = yearMatch ? yearMatch[0] : '';
+      
+      const model = titleParts.slice(1).join(' ').replace(/\d{4}/, '').trim() || '';
+      
+      const specs = {};
+      
+      document.querySelectorAll('div[class*="PropertyRow"], tr').forEach(row => {
+        const cells = row.querySelectorAll('td, div, span');
+        if (cells.length >= 2) {
+          const key = cells[0].textContent.trim();
+          const value = cells[1].textContent.trim();
+          if (key && value && key.length < 50) {
+            specs[key] = value;
+          }
         }
-      }
-    }
-  });
-  
-  return {
-    title: title,
-    price: price,
-    year: year,
-    make: make,
-    model: model,
-    mileage: specs['Kilometers'] || specs['Mileage'] || specs['Km'] || specs['kilometers'] || '',
-    bodyType: specs['Body Type'] || specs['Body type'] || specs['body type'] || '',
-    fuelType: specs['Fuel Type'] || specs['Fuel type'] || specs['fuel type'] || 'Petrol',
-    transmission: specs['Transmission'] || specs['Gearbox'] || specs['transmission'] || 'Automatic',
-    exteriorColor: specs['Exterior Color'] || specs['Color'] || specs['Exterior color'] || specs['color'] || '',
-    interiorColor: specs['Interior Color'] || specs['Interior color'] || specs['interior color'] || '',
-    specs: specs
-  };
-});
+      });
+      
+      document.querySelectorAll('li, div[class*="spec"], div[class*="detail"]').forEach(el => {
+        const text = el.textContent.trim();
+        if (text.includes(':')) {
+          const parts = text.split(':');
+          if (parts.length === 2) {
+            const key = parts[0].trim();
+            const value = parts[1].trim();
+            if (key && value && key.length < 50) {
+              specs[key] = value;
+            }
+          }
+        }
+      });
       
       return {
         title: title,
-        price: getPrice(),
-        year: specs['Year'] || titleParts[titleParts.length - 1] || '',
-        make: titleParts[0] || '',
-        model: titleParts.slice(1, -1).join(' ') || '',
-        mileage: specs['Kilometers'] || specs['Mileage'] || '',
-        bodyType: specs['Body Type'] || '',
-        fuelType: specs['Fuel Type'] || '',
-        transmission: specs['Transmission'] || '',
-        exteriorColor: specs['Exterior Color'] || specs['Color'] || '',
-        interiorColor: specs['Interior Color'] || '',
+        price: price,
+        year: year,
+        make: make,
+        model: model,
+        mileage: specs['Kilometers'] || specs['Mileage'] || specs['Km'] || '',
+        bodyType: specs['Body Type'] || specs['Body type'] || '',
+        fuelType: specs['Fuel Type'] || specs['Fuel type'] || 'Petrol',
+        transmission: specs['Transmission'] || specs['Gearbox'] || 'Automatic',
+        exteriorColor: specs['Exterior Color'] || specs['Color'] || specs['Exterior color'] || '',
+        interiorColor: specs['Interior Color'] || specs['Interior color'] || '',
         specs: specs
       };
     });
     
     const description = await page.evaluate(() => {
-      const descEl = document.querySelector('[class*="description"]');
+      const descEl = document.querySelector('[class*="description"], [data-testid*="description"]');
       return descEl ? descEl.textContent.trim() : '';
     });
     
     console.log('Estrazione immagini HD...');
-const imagesHD = await page.evaluate(() => {
-  const images = new Set();
-  
-  // Cerca tutte le immagini che contengono "dubizzle" nell'URL
-  const imgElements = document.querySelectorAll('img');
-  
-  imgElements.forEach(img => {
-    let src = img.src || img.getAttribute('src') || img.dataset.src || '';
-    
-    // Filtra solo immagini da dbz-images.dubizzle.com
-    if (src && src.includes('dbz-images.dubizzle.com')) {
-      // Escludi loghi e icone
-      if (!src.includes('logo') && !src.includes('icon') && !src.includes('placeholder')) {
-        // Rimuovi parametri query per ottenere versione HD
-        const cleanUrl = src.split('?')[0];
-        images.add(cleanUrl);
-      }
-    }
-  });
-  
-  return Array.from(images);
-});
-
-console.log(`Trovate ${imagesHD.length} immagini`);
-    
-    try {
-      await page.click('[class*="thumbnail"]:first-child, [class*="gallery"] img:first-child');
-      await page.waitForTimeout(2000);
+    const imagesHD = await page.evaluate(() => {
+      const images = new Set();
+      const imgElements = document.querySelectorAll('img');
       
-      const galleryImages = await page.evaluate(() => {
-        const imgs = [];
-        document.querySelectorAll('[class*="gallery"] img, [class*="lightbox"] img, [class*="modal"] img').forEach(img => {
-          const src = img.src || img.dataset.src || img.dataset.original;
-          if (src && !imgs.includes(src)) {
-            imgs.push(src);
+      imgElements.forEach(img => {
+        let src = img.src || img.getAttribute('src') || img.dataset.src || '';
+        
+        if (src && src.includes('dbz-images.dubizzle.com')) {
+          if (!src.includes('logo') && !src.includes('icon') && !src.includes('placeholder')) {
+            const cleanUrl = src.split('?')[0];
+            images.add(cleanUrl);
           }
-        });
-        return imgs;
-      });
-      
-      galleryImages.forEach(img => {
-        if (!imagesHD.includes(img)) {
-          imagesHD.push(img);
         }
       });
-    } catch (e) {
-      console.log('Galleria non disponibile, uso immagini estratte');
-    }
+      
+      return Array.from(images);
+    });
+    
+    console.log(`Trovate ${imagesHD.length} immagini`);
     
     const features = await page.evaluate(() => {
-  const feats = new Set();
-  
-  // Cerca features in vari pattern
-  const selectors = [
-    '[class*="feature"]',
-    '[class*="amenity"]',
-    '[class*="option"]',
-    'li[class*="MuiListItem"]',
-    'div[class*="chip"]',
-    '[data-testid*="feature"]'
-  ];
-  
-  selectors.forEach(selector => {
-    document.querySelectorAll(selector).forEach(el => {
-      const text = el.textContent.trim();
-      // Aggiungi solo se è un testo breve (tipico di un optional)
-      if (text && text.length > 2 && text.length < 100 && !text.includes('\n')) {
-        feats.add(text);
-      }
+      const feats = new Set();
+      
+      const selectors = [
+        '[class*="feature"]',
+        '[class*="amenity"]',
+        '[class*="option"]',
+        'li[class*="MuiListItem"]',
+        'div[class*="chip"]',
+        '[data-testid*="feature"]'
+      ];
+      
+      selectors.forEach(selector => {
+        document.querySelectorAll(selector).forEach(el => {
+          const text = el.textContent.trim();
+          if (text && text.length > 2 && text.length < 100 && !text.includes('\n')) {
+            feats.add(text);
+          }
+        });
+      });
+      
+      return Array.from(feats);
     });
-  });
-  
-  return Array.from(feats);
-});
     
     await browser.close();
     
@@ -232,6 +174,7 @@ console.log(`Trovate ${imagesHD.length} immagini`);
     throw error;
   }
 }
+
 async function enhanceWithAI(carData) {
   const prompt = `Sei un esperto copywriter specializzato in automotive di lusso. Genera contenuti professionali in ITALIANO per questo annuncio auto:
 
