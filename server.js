@@ -38,7 +38,14 @@ async function scrapeDubizzle(url) {
     console.log('Caricamento pagina:', url);
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 90000 });
     await page.waitForTimeout(5000);
-    
+    await page.waitForTimeout(5000);
+
+// DEBUG: Salva screenshot e HTML
+await page.screenshot({ path: '/tmp/dubizzle-debug.png', fullPage: true });
+const html = await page.content();
+console.log('=== INIZIO HTML ===');
+console.log(html.substring(0, 5000)); // Primi 5000 caratteri
+console.log('=== FINE HTML ===');
     try {
       await page.waitForSelector('h6[data-testid="listing-sub-heading"], h1', { timeout: 15000 });
     } catch (e) {
