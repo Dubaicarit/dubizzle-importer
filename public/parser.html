@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dubizzle HTML Parser</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white min-h-screen">
+    <div class="container mx-auto px-6 py-8 max-w-6xl">
+        <header class="text-center mb-12">
+            <h1 class="text-5xl font-bold mb-4 bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
+                🔧 Dubizzle HTML Parser
+            </h1>
+            <p class="text-slate-400 text-lg">Incolla il codice sorgente HTML e genera il CSV</p>
+        </header>
+
+        <!-- Istruzioni -->
+        <div class="bg-blue-500/10 border border-blue-500/30 rounded-xl p-6 mb-8">
+            <h3 class="font-bold mb-3">📋 Istruzioni:</h3>
+            <ol class="space-y-2 text-sm">
+                <li><strong>1.</strong> Apri la pagina Dubizzle dell'auto nel browser</li>
+                <li><strong>2.</strong> Tasto destro → <strong>"Visualizza sorgente pagina"</strong> (o Ctrl+U / Cmd+Option+U)</li>
+                <li><strong>3.</strong> Seleziona tutto (Ctrl+A) e copia (Ctrl+C)</li>
+                <li><strong>4.</strong> Incolla qui sotto nel campo</li>
+                <li><strong>5.</strong> Clicca "Estrai Dati"</li>
+            </ol>
+        </div>
+
+        <!-- Input HTML -->
+        <div class="bg-slate-800/50 backdrop-blur rounded-2xl p-8 shadow-2xl border border-slate-700 mb-8">
+            <label class="block text-sm font-medium text-slate-300 mb-2">Codice HTML della pagina Dubizzle</label>
+            <textarea 
+                id="htmlInput" 
+                placeholder="Incolla qui tutto il codice HTML..."
+                class="w-full h-64 px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-white font-mono text-xs"
+            ></textarea>
+            
+            <button 
+                onclick="parseHTML()" 
+                class="mt-4 px-6 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg font-medium transition-all"
+            >
+                🔍 Estrai Dati
+            </button>
+        </div>
+
+        <!-- Loading -->
+        <div id="loading" class="hidden text-center py-8">
+            <p class="text-slate-400">Analisi HTML in corso...</p>
+        </div>
+
+        <!-- Error -->
+        <div id="error" class="hidden bg-red-500/10 border border-red-500/50 rounded-xl p-4 mb-8">
+            <p class="text-red-300" id="errorMessage"></p>
+        </div>
+
+        <!-- Results -->
+        <div id="results" class="hidden space-y-6">
+            <div class="bg-green-500/10 border border-green-500/50 rounded-xl p-4">
+                <p class="font-medium text-green-300">✅ Dati estratti con successo!</p>
+                <p class="text-sm text-green-400/80" id="successMessage"></p>
+            </div>
+
+            <!-- Dati Auto -->
+            <div class="bg-slate-800/50 backdrop-blur rounded-2xl p-8 shadow-2xl border border-slate-700">
+                <div class="flex items-center justify-between mb-6">
+                    <h2 class="text-2xl font-bold">📊 Dati Estratti</h2>
+                    <button
+                        onclick="downloadCSV()"
+                        class="px-6 py-3 bg-green-600 hover:bg-green-700 rounded-lg font-medium transition-all"
+                    >
+                        ⬇️ Scarica CSV
+                    </button>
+                </div>
+                
+                <div class="grid grid-cols-2 md:grid-cols-3 gap-4" id="carSpecs"></div>
+            </div>
+
+            <!-- Immagini -->
+            <div class="bg-slate-800/50 backdrop-blur rounded-2xl p-8 shadow-2xl border border-slate-700">
+                <div class="flex items-center justify-between mb-6">
+                    <h2 class="text-2xl font-bold">🖼️ Immagini</h2>
+                    <div class="flex gap-3">
+                        <span id="imageCount" class="px-3 py-1 bg-blue-500/20 text-blue-300 rounded-full text-sm"></span>
+                        <button
+                            onclick="downloadImages()"
+                            id="downloadImagesBtn"
+                            class="px-6 py-3 bg-purple-600 hover:bg-purple-700 rounded-lg font-medium transition-all"
+                        >
+                            📥 Scarica Immagini HD
+                        </button>
+                    </div>
+                </div>
+                
+                <div id="imageGrid" class="grid grid-cols-3 md:grid-cols-5 gap-2 mb-4"></div>
+                <div class="text-xs text-slate-500 font-mono bg-slate-900/50 p-3 rounded overflow-x-auto" id="imageUrls"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentData = null;
+
+        function parseHTML() {
+            const html = document.getElementById('htmlInput').value;
+            
+            if (!html || html.length < 100) {
+                showError('Inserisci il codice HTML completo della pagina');
+                return;
+            }
+
+            document.getElementById('error').classList.add('hidden');
+            document.getElementById('results').classList.add('hidden');
+            document.getElementById('loading').classList.remove('hidden');
+
+            // Crea un DOM virtuale
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, 'text/html');
+
+            try {
+                // Estrai dati usando gli stessi selettori
+                const title = doc.querySelector('h6[data-testid="listing-sub-heading"]')?.textContent.trim() || '';
+                const priceText = doc.querySelector('span.MuiTypography-h5')?.textContent.trim() || '';
+                const price = priceText.replace(/[^\d]/g, '');
+
+                // Parse titolo
+                const titleParts = title.split(' ');
+                const make = titleParts[0] || '';
+                const yearMatch = title.match(/\d{4}/);
+                const year = yearMatch ? yearMatch[0] : '';
+                const model = titleParts.slice(1).join(' ').replace(/\d{4}/, '').trim();
+
+                // Estrai specs
+                const specs = {};
+                doc.querySelectorAll('div, li, tr').forEach(el => {
+                    const text = el.textContent;
+                    if (text.includes(':')) {
+                        const parts = text.split(':');
+                        if (parts.length === 2) {
+                            const key = parts[0].trim();
+                            const value = parts[1].trim();
+                            if (key && value && key.length < 50 && value.length < 100) {
+                                specs[key] = value;
+                            }
+                        }
+                    }
+                });
+
+                // Estrai immagini
+                const images = [];
+                doc.querySelectorAll('img').forEach(img => {
+                    let src = img.src || img.getAttribute('src') || img.dataset.src || '';
+                    if (src && src.includes('dbz-images.dubizzle.com')) {
+                        if (!src.includes('logo') && !src.includes('icon')) {
+                            const cleanUrl = src.split('?')[0];
+                            if (!images.includes(cleanUrl)) {
+                                images.push(cleanUrl);
+                            }
+                        }
+                    }
+                });
+
+                currentData = {
+                    year,
+                    make,
+                    model,
+                    title,
+                    price,
+                    mileage: specs['Kilometers'] || specs['Mileage'] || '',
+                    bodyStyle: specs['Body Type'] || '',
+                    transmission: specs['Transmission'] || 'Automatic',
+                    fuelType: specs['Fuel Type'] || 'Petrol',
+                    exteriorColor: specs['Color'] || specs['Exterior Color'] || '',
+                    interiorColor: specs['Interior Color'] || '',
+                    images,
+                    specs
+                };
+
+                displayResults();
+                document.getElementById('loading').classList.add('hidden');
+
+            } catch (error) {
+                console.error(error);
+                showError('Errore durante l\'analisi HTML: ' + error.message);
+                document.getElementById('loading').classList.add('hidden');
+            }
+        }
+
+        function displayResults() {
+            document.getElementById('successMessage').textContent = 
+                `${currentData.images.length} immagini trovate`;
+            document.getElementById('results').classList.remove('hidden');
+
+            const specs = [
+                { label: 'Anno', value: currentData.year },
+                { label: 'Marca', value: currentData.make },
+                { label: 'Modello', value: currentData.model },
+                { label: 'Prezzo', value: `AED ${currentData.price}` },
+                { label: 'Km', value: currentData.mileage },
+                { label: 'Trasmissione', value: currentData.transmission },
+                { label: 'Carburante', value: currentData.fuelType },
+                { label: 'Carrozzeria', value: currentData.bodyStyle },
+                { label: 'Colore Est.', value: currentData.exteriorColor },
+                { label: 'Colore Int.', value: currentData.interiorColor }
+            ];
+
+            document.getElementById('carSpecs').innerHTML = specs
+                .map(s => `
+                    <div class="bg-slate-900/50 rounded-lg p-3">
+                        <p class="text-xs text-slate-500 mb-1">${s.label}</p>
+                        <p class="font-medium">${s.value || 'N/A'}</p>
+                    </div>
+                `).join('');
+
+            document.getElementById('imageCount').textContent = `${currentData.images.length} immagini`;
+            document.getElementById('imageGrid').innerHTML = currentData.images
+                .slice(0, 10)
+                .map(url => `<img src="${url}" class="w-full h-20 object-cover rounded" alt="Car">`)
+                .join('');
+            document.getElementById('imageUrls').textContent = currentData.images.join('\n');
+        }
+
+        function downloadCSV() {
+            const headers = [
+                'year', 'make', 'model', 'body-style', 'mileage', 'transmission',
+                'fuel-economy', 'condition', 'location', 'price', 'drivetrain',
+                'engine', 'exterior-color', 'interior-color', 'mpg', 'stock-number',
+                'vin-number', 'vehicle_overview', 'multi_options', 'latitude',
+                'longitude', 'other_comments', 'video_url', 'city_mpg', 'highway_mpg',
+                'images_url'
+            ];
+
+            const row = [
+                currentData.year,
+                currentData.make,
+                currentData.model,
+                currentData.bodyStyle,
+                currentData.mileage.replace(/[^\d]/g, ''),
+                currentData.transmission,
+                currentData.fuelType,
+                'Used',
+                'Dubai',
+                currentData.price,
+                'N/A',
+                'N/A',
+                currentData.exteriorColor,
+                currentData.interiorColor,
+                'N/A',
+                `DUB-${Date.now()}`,
+                'N/A',
+                currentData.title,
+                '',
+                '25.2048',
+                '55.2708',
+                '',
+                '',
+                '',
+                '',
+                currentData.images.join('|')
+            ];
+
+            const csv = headers.join(',') + '\n' + row.join(',');
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `dubizzle_${currentData.make}_${currentData.model}_${Date.now()}.csv`;
+            link.click();
+        }
+
+        async function downloadImages() {
+            alert('Funzione download immagini in sviluppo. Per ora usa gli URL nel CSV.');
+        }
+
+        function showError(message) {
+            document.getElementById('errorMessage').textContent = message;
+            document.getElementById('error').classList.remove('hidden');
+        }
+    </script>
+</body>
+</html>
