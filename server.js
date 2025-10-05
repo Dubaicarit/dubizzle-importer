@@ -48,32 +48,77 @@ try {
   console.log('Selettore h1 non trovato, continuo comunque...');
 }
     
-    const carData = await page.evaluate(() => {
-      const getText = (selector) => {
-        const el = document.querySelector(selector);
-        return el ? el.textContent.trim() : '';
-      };
-      
-      const getPrice = () => {
-        const priceEl = document.querySelector('[class*="price"]');
-        if (priceEl) {
-          const match = priceEl.textContent.match(/[\d,]+/);
-          return match ? match[0].replace(/,/g, '') : '';
+   const carData = await page.evaluate(() => {
+  const getText = (selector) => {
+    const el = document.querySelector(selector);
+    return el ? el.textContent.trim() : '';
+  };
+  
+  // Estrai titolo - nuovo selettore Dubizzle
+  const title = getText('h6[data-testid="listing-sub-heading"]') || 
+                getText('h6.MuiTypography-h6') || 
+                getText('h1') || '';
+  
+  // Estrai prezzo - nuovo selettore Dubizzle
+  const priceText = getText('span.MuiTypography-h5') || '';
+  const price = priceText.replace(/[^\d]/g, '');
+  
+  // Parse titolo per marca/modello/anno
+  const titleParts = title.split(' ');
+  const make = titleParts[0] || '';
+  
+  // Estrai anno dal titolo se presente
+  const yearMatch = title.match(/\d{4}/);
+  const year = yearMatch ? yearMatch[0] : '';
+  
+  // Modello è tutto tranne marca e anno
+  const model = titleParts.slice(1).join(' ').replace(/\d{4}/, '').trim() || '';
+  
+  // Estrai specifiche dalla tabella
+  const specs = {};
+  
+  // Pattern 1: Cerca righe con struttura tabella
+  document.querySelectorAll('div[class*="PropertyRow"], tr').forEach(row => {
+    const cells = row.querySelectorAll('td, div, span');
+    if (cells.length >= 2) {
+      const key = cells[0].textContent.trim();
+      const value = cells[1].textContent.trim();
+      if (key && value && key.length < 50) {
+        specs[key] = value;
+      }
+    }
+  });
+  
+  // Pattern 2: Cerca liste con due punti
+  document.querySelectorAll('li, div[class*="spec"], div[class*="detail"]').forEach(el => {
+    const text = el.textContent.trim();
+    if (text.includes(':')) {
+      const parts = text.split(':');
+      if (parts.length === 2) {
+        const key = parts[0].trim();
+        const value = parts[1].trim();
+        if (key && value && key.length < 50) {
+          specs[key] = value;
         }
-        return '';
-      };
-      
-      const title = getText('h1') || '';
-      const titleParts = title.split(' ');
-      
-      const specs = {};
-      document.querySelectorAll('[class*="spec"], [class*="detail"]').forEach(el => {
-        const label = el.querySelector('[class*="label"]');
-        const value = el.querySelector('[class*="value"]');
-        if (label && value) {
-          specs[label.textContent.trim()] = value.textContent.trim();
-        }
-      });
+      }
+    }
+  });
+  
+  return {
+    title: title,
+    price: price,
+    year: year,
+    make: make,
+    model: model,
+    mileage: specs['Kilometers'] || specs['Mileage'] || specs['Km'] || specs['kilometers'] || '',
+    bodyType: specs['Body Type'] || specs['Body type'] || specs['body type'] || '',
+    fuelType: specs['Fuel Type'] || specs['Fuel type'] || specs['fuel type'] || 'Petrol',
+    transmission: specs['Transmission'] || specs['Gearbox'] || specs['transmission'] || 'Automatic',
+    exteriorColor: specs['Exterior Color'] || specs['Color'] || specs['Exterior color'] || specs['color'] || '',
+    interiorColor: specs['Interior Color'] || specs['Interior color'] || specs['interior color'] || '',
+    specs: specs
+  };
+});
       
       return {
         title: title,
@@ -97,42 +142,30 @@ try {
     });
     
     console.log('Estrazione immagini HD...');
-    const imagesHD = await page.evaluate(async () => {
-      const images = [];
-      const thumbnails = document.querySelectorAll('[class*="thumbnail"], [class*="gallery"] img, [class*="image-gallery"] img');
-      
-      const getHDUrl = (src) => {
-        if (!src) return null;
-        return src
-          .replace(/\/thumbs?\//, '/images/')
-          .replace(/\/(small|medium|thumb)\//, '/large/')
-          .replace(/[?&](w|h|width|height)=\d+/g, '')
-          .replace(/[?&]resize=[^&]+/g, '');
-      };
-      
-      thumbnails.forEach(img => {
-        const hdUrl = img.dataset.src || img.dataset.original || img.dataset.large || img.src;
-        const cleanUrl = getHDUrl(hdUrl);
-        if (cleanUrl && !images.includes(cleanUrl)) {
-          images.push(cleanUrl);
-        }
-      });
-      
-      if (images.length === 0) {
-        const allImages = document.querySelectorAll('img');
-        allImages.forEach(img => {
-          const src = img.src || img.dataset.src;
-          if (src && src.includes('dubizzle') && !src.includes('logo') && !src.includes('icon')) {
-            const cleanUrl = getHDUrl(src);
-            if (cleanUrl && !images.includes(cleanUrl)) {
-              images.push(cleanUrl);
-            }
-          }
-        });
+const imagesHD = await page.evaluate(() => {
+  const images = new Set();
+  
+  // Cerca tutte le immagini che contengono "dubizzle" nell'URL
+  const imgElements = document.querySelectorAll('img');
+  
+  imgElements.forEach(img => {
+    let src = img.src || img.getAttribute('src') || img.dataset.src || '';
+    
+    // Filtra solo immagini da dbz-images.dubizzle.com
+    if (src && src.includes('dbz-images.dubizzle.com')) {
+      // Escludi loghi e icone
+      if (!src.includes('logo') && !src.includes('icon') && !src.includes('placeholder')) {
+        // Rimuovi parametri query per ottenere versione HD
+        const cleanUrl = src.split('?')[0];
+        images.add(cleanUrl);
       }
-      
-      return images;
-    });
+    }
+  });
+  
+  return Array.from(images);
+});
+
+console.log(`Trovate ${imagesHD.length} immagini`);
     
     try {
       await page.click('[class*="thumbnail"]:first-child, [class*="gallery"] img:first-child');
@@ -159,15 +192,30 @@ try {
     }
     
     const features = await page.evaluate(() => {
-      const feats = [];
-      document.querySelectorAll('[class*="feature"], [class*="amenity"], [class*="option"]').forEach(el => {
-        const text = el.textContent.trim();
-        if (text && text.length > 2) {
-          feats.push(text);
-        }
-      });
-      return feats;
+  const feats = new Set();
+  
+  // Cerca features in vari pattern
+  const selectors = [
+    '[class*="feature"]',
+    '[class*="amenity"]',
+    '[class*="option"]',
+    'li[class*="MuiListItem"]',
+    'div[class*="chip"]',
+    '[data-testid*="feature"]'
+  ];
+  
+  selectors.forEach(selector => {
+    document.querySelectorAll(selector).forEach(el => {
+      const text = el.textContent.trim();
+      // Aggiungi solo se è un testo breve (tipico di un optional)
+      if (text && text.length > 2 && text.length < 100 && !text.includes('\n')) {
+        feats.add(text);
+      }
     });
+  });
+  
+  return Array.from(feats);
+});
     
     await browser.close();
     
