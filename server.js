@@ -19,23 +19,34 @@ async function scrapeDubizzle(url) {
   let browser;
   
   try {
-    browser = await puppeteer.launch({
-      headless: true,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-gpu'
-      ]
-    });
+   browser = await puppeteer.launch({
+  headless: 'new',
+  args: [
+    '--no-sandbox',
+    '--disable-setuid-sandbox',
+    '--disable-dev-shm-usage',
+    '--disable-gpu',
+    '--disable-blink-features=AutomationControlled',
+    '--window-size=1920,1080'
+  ]
+});
 
     const page = await browser.newPage();
     await page.setViewport({ width: 1920, height: 1080 });
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
     
     console.log('Caricamento pagina:', url);
-    await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
-    await page.waitForSelector('h1', { timeout: 10000 });
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 90000 });
+
+// Aspetta che la pagina carichi completamente
+await page.waitForTimeout(5000);
+
+// Prova diversi selettori
+try {
+  await page.waitForSelector('h1, [data-testid="title"], .listing-title', { timeout: 15000 });
+} catch (e) {
+  console.log('Selettore h1 non trovato, continuo comunque...');
+}
     
     const carData = await page.evaluate(() => {
       const getText = (selector) => {
